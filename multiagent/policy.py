@@ -37,16 +37,16 @@ class InteractivePolicy(Policy):
             if self.move[2]: u[4] += 1.0
             if True not in self.move:
                 u[0] += 1.0
-        return np.concatenate([u, np.zeros(self.env.world.dim_c)])
+        return np.concatenate([u, np.zeros(self.env.world.dim_c)])/10.0
 
     # keyboard event callbacks
     def key_press(self, k, mod):
-        if k==key.LEFT:  self.move[0] = True
-        if k==key.RIGHT: self.move[1] = True
-        if k==key.UP:    self.move[2] = True
-        if k==key.DOWN:  self.move[3] = True
+        if k==key.LEFT:  self.move[1] = True
+        if k==key.RIGHT: self.move[0] = True
+        if k==key.UP:    self.move[3] = True
+        if k==key.DOWN:  self.move[2] = True
     def key_release(self, k, mod):
-        if k==key.LEFT:  self.move[0] = False
-        if k==key.RIGHT: self.move[1] = False
-        if k==key.UP:    self.move[2] = False
-        if k==key.DOWN:  self.move[3] = False
+        if k==key.LEFT:  self.move[1] = False
+        if k==key.RIGHT: self.move[0] = False
+        if k==key.UP:    self.move[3] = False
+        if k==key.DOWN:  self.move[2] = False

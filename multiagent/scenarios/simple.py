@@ -1,5 +1,5 @@
 import numpy as np
-from multiagent.core import World, Agent, Landmark
+from multiagent.core import World, Agent, Landmark, Wall
 from multiagent.scenario import BaseScenario
 
 class Scenario(BaseScenario):
@@ -9,14 +9,20 @@ class Scenario(BaseScenario):
         world.agents = [Agent() for i in range(1)]
         for i, agent in enumerate(world.agents):
             agent.name = 'agent %d' % i
-            agent.collide = False
+            agent.collide = True
             agent.silent = True
         # add landmarks
         world.landmarks = [Landmark() for i in range(1)]
         for i, landmark in enumerate(world.landmarks):
             landmark.name = 'landmark %d' % i
-            landmark.collide = False
+            landmark.collide = True
             landmark.movable = False
+        world.walls = [Wall() for i in range(1)]
+        # add walls
+        for i, wall in enumerate(world.walls):
+            wall.name = 'wall %d' % i
+            wall.collide = True
+            wall.movable = False
         # make initial conditions
         self.reset_world(world)
         return world
@@ -28,15 +34,26 @@ class Scenario(BaseScenario):
         # random properties for landmarks
         for i, landmark in enumerate(world.landmarks):
             landmark.color = np.array([0.75,0.75,0.75])
+        # random properties for walls
+        for i, wall in enumerate(world.walls):
+            wall.color = np.array([0, 0.7, 0.0])
         world.landmarks[0].color = np.array([0.75,0.25,0.25])
         # set random initial states
         for agent in world.agents:
-            agent.state.p_pos = np.random.uniform(-1,+1, world.dim_p)
+            agent.state.p_pos = np.array([-0.9, -0.9])
+                # np.random.uniform(-1,+1, world.dim_p)
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
-        for i, landmark in enumerate(world.landmarks):
-            landmark.state.p_pos = np.random.uniform(-1,+1, world.dim_p)
-            landmark.state.p_vel = np.zeros(world.dim_p)
+
+        landmark_locations = np.zeros((2, 3))
+        landmark_locations[:, 0] = np.array([0.9, 0.9])
+        landmark_locations[:, 1] = np.array([-0.9, 0.9])
+        landmark_locations[:, 2] = np.array([0.9, -0.9])
+        for i, entity in enumerate(world.entities):
+            if 'agent' in entity.name: continue
+            entity.state.p_pos = landmark_locations[:,i]
+                # np.random.uniform(-1,+1, world.dim_p)
+            entity.state.p_vel = np.zeros(world.dim_p)
 
     def reward(self, agent, world):
         dist2 = np.sum(np.square(agent.state.p_pos - world.landmarks[0].state.p_pos))

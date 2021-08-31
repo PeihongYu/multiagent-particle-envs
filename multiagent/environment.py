@@ -201,6 +201,9 @@ class MultiAgentEnv(gym.Env):
         if mode == 'human':
             alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
             message = ''
+            if len(self.world.agents) == 1:
+                agent = self.world.agents[0]
+                message += np.array2string(agent.state.p_pos)
             for agent in self.world.agents:
                 comm = []
                 for other in self.world.agents:
@@ -228,7 +231,11 @@ class MultiAgentEnv(gym.Env):
             self.render_geoms = []
             self.render_geoms_xform = []
             for entity in self.world.entities:
-                geom = rendering.make_circle(entity.size)
+                if 'wall' in entity.name:
+                    l, r, t, b = entity.length / 2, - entity.length / 2, entity.width / 2, -entity.width / 2
+                    geom = rendering.make_polygon([(l,b), (l,t), (r,t), (r,b)])
+                else:
+                    geom = rendering.make_circle(entity.size)
                 xform = rendering.Transform()
                 if 'agent' in entity.name:
                     geom.set_color(*entity.color, alpha=0.5)
@@ -248,7 +255,7 @@ class MultiAgentEnv(gym.Env):
         for i in range(len(self.viewers)):
             from multiagent import rendering
             # update bounds to center around agent
-            cam_range = 1
+            cam_range = 2
             if self.shared_viewer:
                 pos = np.zeros(self.world.dim_p)
             else:
