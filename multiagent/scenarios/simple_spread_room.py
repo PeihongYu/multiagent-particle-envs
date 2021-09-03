@@ -1,15 +1,17 @@
 import numpy as np
-from multiagent.core import World, Agent, Landmark
+from multiagent.core import World, Agent, Landmark, Wall
 from multiagent.scenario import BaseScenario
+from multiagent.scenarios.room_arguments import get_room_args
 
+room_args = get_room_args()
 
 class Scenario(BaseScenario):
     def make_world(self):
         world = World()
         # set any world properties first
         world.dim_c = 2
-        num_agents = 3
-        num_landmarks = 3
+        num_agents = 1
+        num_landmarks = 1
         world.collaborative = True
         # add agents
         world.agents = [Agent() for i in range(num_agents)]
@@ -17,13 +19,19 @@ class Scenario(BaseScenario):
             agent.name = 'agent %d' % i
             agent.collide = True
             agent.silent = True
-            agent.size = 0.15
+            agent.size = 0.08
         # add landmarks
         world.landmarks = [Landmark() for i in range(num_landmarks)]
         for i, landmark in enumerate(world.landmarks):
             landmark.name = 'landmark %d' % i
             landmark.collide = False
             landmark.movable = False
+        # add walls
+        world.walls = [Wall() for i in range(room_args.wall_num)]
+        for i, wall in enumerate(world.walls):
+            wall.name = 'wall %d' % i
+            wall.collide = True
+            wall.movable = False
         # make initial conditions
         self.reset_world(world)
         return world
@@ -35,6 +43,9 @@ class Scenario(BaseScenario):
         # random properties for landmarks
         for i, landmark in enumerate(world.landmarks):
             landmark.color = np.array([0.25, 0.25, 0.25])
+        # random properties for walls
+        for i, wall in enumerate(world.walls):
+            wall.color = np.array([0, 0.7, 0.0])
         # set random initial states
         for agent in world.agents:
             agent.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
@@ -43,6 +54,11 @@ class Scenario(BaseScenario):
         for i, landmark in enumerate(world.landmarks):
             landmark.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
             landmark.state.p_vel = np.zeros(world.dim_p)
+        for i, wall in enumerate(world.walls):
+            wall.state.p_pos = np.array(room_args.wall_centers[i]) + world.landmarks[0].state.p_pos
+            wall.state.p_vel = np.zeros(world.dim_p)
+            wall.x_len = room_args.wall_shapes[i][0]
+            wall.y_len = room_args.wall_shapes[i][1]
 
     def benchmark_data(self, agent, world):
         rew = 0
@@ -61,7 +77,6 @@ class Scenario(BaseScenario):
                     rew -= 1
                     collisions += 1
         return (rew, collisions, min_dists, occupied_landmarks)
-
 
     def is_collision(self, agent1, agent2):
         delta_pos = agent1.state.p_pos - agent2.state.p_pos

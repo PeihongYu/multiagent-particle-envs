@@ -54,12 +54,12 @@ class Entity(object):
 class Landmark(Entity):
      def __init__(self):
         super(Landmark, self).__init__()
-         
+
 class Wall(Entity):
     def __init__(self):
         super(Wall, self).__init__()
-        self.width = 0.3
-        self.length = 0.6
+        self.x_len = 0.3
+        self.y_len = 1
 
 # properties of agent entities
 class Agent(Entity):
@@ -143,7 +143,7 @@ class World(object):
         for i,agent in enumerate(self.agents):
             if agent.movable:
                 noise = np.random.randn(*agent.action.u.shape) * agent.u_noise if agent.u_noise else 0.0
-                p_force[i] = agent.action.u + noise                
+                p_force[i] = agent.action.u + noise
         return p_force
 
     # gather physical forces acting on entities
@@ -151,14 +151,15 @@ class World(object):
         # simple (but inefficient) collision response
         for a,entity_a in enumerate(self.entities):
             for b,entity_b in enumerate(self.entities):
-                if(b <= a): continue
+                if b <= a: continue
+                if not entity_a.movable and not entity_b.movable: continue
                 [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
                 if(f_a is not None):
                     if(p_force[a] is None): p_force[a] = 0.0
-                    p_force[a] = f_a + p_force[a] 
+                    p_force[a] = f_a + p_force[a]
                 if(f_b is not None):
                     if(p_force[b] is None): p_force[b] = 0.0
-                    p_force[b] = f_b + p_force[b]        
+                    p_force[b] = f_b + p_force[b]
         return p_force
 
     # integrate physical state
@@ -181,7 +182,7 @@ class World(object):
             agent.state.c = np.zeros(self.dim_c)
         else:
             noise = np.random.randn(*agent.action.c.shape) * agent.c_noise if agent.c_noise else 0.0
-            agent.state.c = agent.action.c + noise      
+            agent.state.c = agent.action.c + noise
 
     # get collision forces for any contact between two entities
     def get_collision_force(self, entity_a, entity_b):
@@ -189,11 +190,18 @@ class World(object):
             return [None, None] # not a collider
         if (entity_a is entity_b):
             return [None, None] # don't collide against itself
-        # compute actual distance between entities
-        delta_pos = entity_a.state.p_pos - entity_b.state.p_pos
-        dist = np.sqrt(np.sum(np.square(delta_pos)))
-        # minimum allowable distance
-        dist_min = entity_a.size + entity_b.size
+
+        if 'wall' in entity_a.name:
+            delta_pos, dist, dist_min = self.get_dist_min_to_wall(entity_b, entity_a)
+        elif 'wall' in entity_b.name:
+            delta_pos, dist, dist_min = self.get_dist_min_to_wall(entity_a, entity_b)
+        else:
+            # compute actual distance between entities
+            delta_pos = entity_a.state.p_pos - entity_b.state.p_pos
+            dist = np.sqrt(np.sum(np.square(delta_pos)))
+            # minimum allowable distance
+            dist_min = entity_a.size + entity_b.size
+
         # softmax penetration
         k = self.contact_margin
         penetration = np.logaddexp(0, -(dist - dist_min)/k)*k
@@ -202,5 +210,24 @@ class World(object):
         force_b = -force if entity_b.movable else None
         return [force_a, force_b]
 
-    def get_dist_min_to_wall(self):
-        return 0
+    def get_dist_min_to_wall(self, agent, wall):
+        vec = np.append(agent.state.p_pos - wall.state.p_pos, 0)
+        corner1 = np.array([wall.x_len / 2, wall.y_len / 2, 0])
+        corner2 = np.array([-wall.x_len / 2, wall.y_len / 2, 0])
+        flag1 = np.dot(np.cross(corner1, vec), np.cross(corner1, corner2))
+        flag2 = np.dot(np.cross(corner2, vec), np.cross(corner2, corner1))
+        if ((flag1 > 0 and flag2 > 0) or (flag1 < 0 and flag2 < 0)) and abs(vec[0]) <= wall.x_len / 2:
+            delta_pos = np.array([0, vec[1]])
+            dist = np.linalg.norm(delta_pos)
+            dist_min = agent.size + wall.y_len / 2
+        elif ((flag1 > 0 and flag2 < 0) or (flag1 < 0 and flag2 > 0)) and abs(vec[1]) <= wall.y_len / 2:
+            delta_pos = np.array([vec[0], 0])
+            dist = np.linalg.norm(delta_pos)
+            dist_min = agent.size + wall.x_len / 2
+        else:
+            nearest_corner = np.array([wall.x_len / 2 * ((vec[0] > 0) * 2 - 1),
+                                       wall.y_len / 2* ((vec[1] > 0) * 2 - 1)])
+            delta_pos = vec[:2] - nearest_corner
+            dist = np.linalg.norm(delta_pos)
+            dist_min = agent.size
+        return delta_pos, dist, dist_min

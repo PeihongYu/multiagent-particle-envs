@@ -1,6 +1,9 @@
 import numpy as np
 from multiagent.core import World, Agent, Landmark, Wall
 from multiagent.scenario import BaseScenario
+from multiagent.scenarios.room_arguments import get_room_args
+
+room_args = get_room_args()
 
 class Scenario(BaseScenario):
     def make_world(self):
@@ -17,12 +20,21 @@ class Scenario(BaseScenario):
             landmark.name = 'landmark %d' % i
             landmark.collide = True
             landmark.movable = False
-        world.walls = [Wall() for i in range(1)]
+
+        # world.walls = [Wall() for i in range(2)]
+        # # add walls
+        # for i, wall in enumerate(world.walls):
+        #     wall.name = 'wall %d' % i
+        #     wall.collide = True
+        #     wall.movable = False
+
+        world.walls = [Wall() for i in range(room_args.wall_num)]
         # add walls
         for i, wall in enumerate(world.walls):
             wall.name = 'wall %d' % i
             wall.collide = True
             wall.movable = False
+
         # make initial conditions
         self.reset_world(world)
         return world
@@ -45,15 +57,27 @@ class Scenario(BaseScenario):
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
 
-        landmark_locations = np.zeros((2, 3))
-        landmark_locations[:, 0] = np.array([0.9, 0.9])
+        landmark_locations = np.zeros((2, 4))
+        landmark_locations[:, 0] = np.array([-0.9, -0.9])
         landmark_locations[:, 1] = np.array([-0.9, 0.9])
-        landmark_locations[:, 2] = np.array([0.9, -0.9])
-        for i, entity in enumerate(world.entities):
-            if 'agent' in entity.name: continue
-            entity.state.p_pos = landmark_locations[:,i]
+        landmark_locations[:, 2] = np.array([0.9, -0.2])
+        landmark_locations[:, 3] = np.array([0.9, 0.22])
+        # for i, entity in enumerate(world.entities):
+        #     if 'agent' in entity.name: continue
+        #     entity.state.p_pos = landmark_locations[:,i]
+        #         # np.random.uniform(-1,+1, world.dim_p)
+        #     entity.state.p_vel = np.zeros(world.dim_p)
+
+        for i, landmark in enumerate(world.landmarks):
+            landmark.state.p_pos = landmark_locations[:, 1]
                 # np.random.uniform(-1,+1, world.dim_p)
-            entity.state.p_vel = np.zeros(world.dim_p)
+            landmark.state.p_vel = np.zeros(world.dim_p)
+
+        for i, wall in enumerate(world.walls):
+            wall.state.p_pos = np.array(room_args.wall_centers[i]) + 0.8
+            wall.state.p_vel = np.zeros(world.dim_p)
+            wall.x_len = room_args.wall_shapes[i][0]
+            wall.y_len = room_args.wall_shapes[i][1]
 
     def reward(self, agent, world):
         dist2 = np.sum(np.square(agent.state.p_pos - world.landmarks[0].state.p_pos))

@@ -232,7 +232,7 @@ class MultiAgentEnv(gym.Env):
             self.render_geoms_xform = []
             for entity in self.world.entities:
                 if 'wall' in entity.name:
-                    l, r, t, b = entity.length / 2, - entity.length / 2, entity.width / 2, -entity.width / 2
+                    l, r, t, b = entity.x_len / 2, - entity.x_len / 2, entity.y_len / 2, -entity.y_len / 2
                     geom = rendering.make_polygon([(l,b), (l,t), (r,t), (r,b)])
                 else:
                     geom = rendering.make_circle(entity.size)
