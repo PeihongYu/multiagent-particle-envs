@@ -16,7 +16,6 @@ import multiagent.scenarios as scenarios
 
 CONST = CONSTANTS()
 
-
 # get environment
 scenario_name = "simple_spread_room"
 # load scenario from script
@@ -24,8 +23,7 @@ scenario = scenarios.load(scenario_name + ".py").Scenario()
 # create world
 world = scenario.make_world()
 # create multiagent environment
-env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, shared_viewer=True)
-
+env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, shared_viewer=False)
 env.render()
 time.sleep(2)
 
@@ -41,18 +39,14 @@ curState = []
 newState = []
 reward_history = []
 agent_history_dict = defaultdict(list)
-totalViewed = []
-dispFlag = False
 
-keyPress = 0
 timestep = 0
 loss = None
 
 for episode in tqdm(range(NUM_EPISODES)):
-    curRawState = env.reset()
-
-    # generate state for each agent
-    curState = rlAgent.formatInput(curRawState)
+    curVecState = env.reset()
+    curImgState = env.render()
+    curState = [curVecState, curImgState]
 
     episodeReward = 0
     epidoseLoss = 0
@@ -63,35 +57,18 @@ for episode in tqdm(range(NUM_EPISODES)):
     for step in range(LEN_EPISODES):
         timestep += 1
 
-        # TODO save video
-        if episode % 500 in range(10, 15) and step % 4 == 0:
-            env.save2Vid(episode, step)
-        #        a = t()
         # Get agent actions
-        for i in range(CONST.NUM_AGENTS):
-            action = rlAgent.policy.act(curState[i], memory,i)
-            aActions.append(action)
+        # for i in range(CONST.NUM_AGENTS):
+        #     action = rlAgent.policy.act(curState[i], memory,i)
+        #     aActions.append(action)
         aActions = rlAgent.policy_old.act(curState, memory, CONST.NUM_AGENTS)
-        #        b = t()
-        #        print("step: ", round(b-a,2))
 
-        # do actions
-
-        newRawState = env.step(aActions)
-        #        newRawState  = env.step([0])
-        agent_pos_list, current_map_state, local_heatmap_list, minimap_list, local_reward_list, shared_reward, done = newRawState
+        # Perform actions
+        newVecState, reward, done, info = env.step(aActions)
+        newImgState = env.render()
+        newState = [newVecState, newImgState]
         if step == LEN_EPISODES - 1:
             done = True
-
-        for agent_index in range(CONST.NUM_AGENTS):
-            if CONST.isSharedReward:
-                memory.rewards.append(shared_reward)
-            else:
-                memory.rewards.append(local_reward_list[agent_index])
-            memory.is_terminals.append(done)
-
-        # update nextState
-        newState = rlAgent.formatInput(newRawState)
 
         if timestep % UPDATE_TIMESTEP == 0:
             loss = rlAgent.update(memory)
@@ -99,14 +76,9 @@ for episode in tqdm(range(NUM_EPISODES)):
             timestep = 0
 
         # record history
-
         for i in range(CONST.NUM_AGENTS):
-            if CONST.isSharedReward:
-                agent_episode_reward[i] += shared_reward
-            else:
-                agent_episode_reward[i] += local_reward_list[i]
-        episodeReward += shared_reward
-        #        print(shared_reward, step)
+            agent_episode_reward[i] += reward[i]
+
         # set current state for next step
         curState = newState
 
@@ -122,7 +94,7 @@ for episode in tqdm(range(NUM_EPISODES)):
         agent_history_dict[i].append((agent_episode_reward[i]))
 
     # You may want to plot periodically instead of after every episode
-    # Otherwise, things will slow
+    # Otherwise, things will be slow
     rlAgent.summaryWriter_addMetrics(episode, loss, reward_history, agent_history_dict, LEN_EPISODES)
     if episode % 50 == 0:
         rlAgent.saveModel("checkpoints")

@@ -34,6 +34,7 @@ class Memory:
 class ActorCritic(nn.Module):
     def __init__(self, env):
         super(ActorCritic, self).__init__()
+        self.agent_id = 0
 
         # actor
         #        self.feature1 = nn.Sequential(
@@ -56,7 +57,7 @@ class ActorCritic(nn.Module):
         #                    nn.ReLU(),
         #                    nn.Linear(500, 256),
         #                    nn.ReLU(),
-        #                    nn.Linear(256, len(env.get_action_space())),
+        #                    nn.Linear(256, len(`env.`get_action_space())),
         #                    nn.Softmax(dim=-1)
         #                )
 
@@ -69,12 +70,15 @@ class ActorCritic(nn.Module):
             nn.ReLU(),
             nn.Flatten()
         )
+        self.feature1v = nn.Sequential(
+            nn.Linear(env.observation_space[self.agent_id].shape[0], env.observation_space[self.agent_id].shape[0])
+        )
         self.reg1 = nn.Sequential(
-            nn.Linear(2 * 2 * 32, 500),
+            nn.Linear(2 * 2 * 32 + env.observation_space[self.agent_id].shape[0], 500),
             nn.ReLU(),
             nn.Linear(500, 256),
             nn.ReLU(),
-            nn.Linear(256, len(env.get_action_space())),
+            nn.Linear(256, env.get_action_dim()[self.agent_id]),
             nn.Softmax(dim=-1)
         )
 
@@ -111,8 +115,11 @@ class ActorCritic(nn.Module):
             nn.ReLU(),
             nn.Flatten()
         )
+        self.feature2v = nn.Sequential(
+            nn.Linear(env.observation_space[self.agent_id].shape[0], env.observation_space[self.agent_id].shape[0])
+        )
         self.reg2 = nn.Sequential(
-            nn.Linear(2 * 2 * 32, 500),
+            nn.Linear(2 * 2 * 32 + env.observation_space[self.agent_id].shape[0], 500),
             nn.ReLU(),
             nn.Linear(500, 256),
             nn.ReLU(),
@@ -121,15 +128,17 @@ class ActorCritic(nn.Module):
 
         self.train()
 
-    def action_layer(self, x1):
-        x = self.feature1(x1)
-        #        x = torch.cat((x,x2), dim = 1)
+    def action_layer(self, x1, x2):
+        x1 = self.feature1(x1)
+        x2 = self.feature1v(x2)
+        x = torch.cat((x1, x2), dim = 1)
         x = self.reg1(x)
         return x
 
-    def value_layer(self, x1):
-        x = self.feature2(x1)
-        #        x = torch.cat((x,x2), dim = 1)
+    def value_layer(self, x1, x2):
+        x1 = self.feature2(x1)
+        x2 = self.feature2v(x2)
+        x = torch.cat((x1,x2), dim = 1)
         x = self.reg2(x)
         return x
 
@@ -138,8 +147,9 @@ class ActorCritic(nn.Module):
 
     def act(self, state, memory, num_agents):
         with torch.no_grad():
-            state = torch.from_numpy(state).float().to(device)
-            action_probs = self.action_layer(state)
+            state1 = torch.from_numpy(state[0][0]).float().to(device)
+            state2 = torch.from_numpy(state[1][0]).float().to(device)
+            action_probs = self.action_layer(state1, state2)
             dist = Categorical(action_probs)
             action = dist.sample()
 
@@ -316,3 +326,4 @@ class PPO:
         else:
             self.policy.load_state_dict(torch.load(filePath))
         self.policy.eval()
+

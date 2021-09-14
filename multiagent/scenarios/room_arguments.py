@@ -1,5 +1,5 @@
 import argparse
-
+import random
 
 def get_room_args():
     parser = argparse.ArgumentParser()
@@ -12,7 +12,8 @@ def get_room_args():
 
     args.wall_num = args.room_num * 7
     for i in range(args.room_num):
-        wall_centers, wall_shapes = get_room(i)
+        id = random.randint(0, 3)
+        wall_centers, wall_shapes = get_room(id)
         args.wall_centers.extend(wall_centers)
         args.wall_shapes.extend(wall_shapes)
 

@@ -2,6 +2,8 @@ import gym
 from gym import spaces
 from gym.envs.registration import EnvSpec
 import numpy as np
+from skimage.transform import resize
+
 from multiagent.multi_discrete import MultiDiscrete
 
 # environment for all agents in the multiagent world
@@ -36,8 +38,11 @@ class MultiAgentEnv(gym.Env):
         self.time = 0
 
         # configure spaces
+        self.use_grascale = True
+        self.img_obs_dim = 50
         self.action_space = []
         self.observation_space = []
+        self.img_observation_space = []
         for agent in self.agents:
             total_action_space = []
             # physical action space
@@ -68,6 +73,12 @@ class MultiAgentEnv(gym.Env):
             obs_dim = len(observation_callback(agent, self.world))
             self.observation_space.append(spaces.Box(low=-np.inf, high=+np.inf, shape=(obs_dim,), dtype=np.float32))
             agent.action.c = np.zeros(self.world.dim_c)
+            # image observation space
+            img_dim = self.img_obs_dim
+            if self.use_grascale:
+                self.img_observation_space.append(spaces.Box(low=0, high=1, shape=(1, img_dim, img_dim), dtype=np.float32))
+            else:
+                self.img_observation_space.append(spaces.Box(low=0, high=1, shape=(3, img_dim, img_dim), dtype=np.float32))
 
         # rendering
         self.shared_viewer = shared_viewer
@@ -76,6 +87,19 @@ class MultiAgentEnv(gym.Env):
         else:
             self.viewers = [None] * self.n
         self._reset_render()
+
+    def get_action_dim(self):
+        action_dim = []
+        from gym import spaces
+        for i in range(len(self.agents)):
+            if isinstance(self.action_space[i], spaces.Box):
+                assert len(self.action_space[i].shape) == 1
+                action_dim.append(self.action_space[i].shape[0])
+            elif isinstance(self.action_space[i], spaces.Discrete):
+                action_dim.append(self.action_space[i].n)
+            else:
+                raise NotImplementedError
+        return action_dim
 
     def step(self, action_n):
         obs_n = []
@@ -197,13 +221,13 @@ class MultiAgentEnv(gym.Env):
         self.render_geoms_xform = None
 
     # render environment
-    def render(self, mode='human'):
+    def render(self, mode='rgb_array'):  #mode='human'
         if mode == 'human':
             alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
             message = ''
-            if len(self.world.agents) == 1:
-                agent = self.world.agents[0]
-                message += np.array2string(agent.state.p_pos)
+            # if len(self.world.agents) == 1:
+            #     agent = self.world.agents[0]
+            #     message += np.array2string(agent.state.p_pos)
             for agent in self.world.agents:
                 comm = []
                 for other in self.world.agents:
@@ -255,17 +279,27 @@ class MultiAgentEnv(gym.Env):
         for i in range(len(self.viewers)):
             from multiagent import rendering
             # update bounds to center around agent
-            cam_range = 2
+            cam_range = 1
             if self.shared_viewer:
                 pos = np.zeros(self.world.dim_p)
             else:
+                # pos = self.world.landmarks[i].state.p_pos
                 pos = self.agents[i].state.p_pos
-            self.viewers[i].set_bounds(pos[0]-cam_range,pos[0]+cam_range,pos[1]-cam_range,pos[1]+cam_range)
+            self.viewers[i].set_bounds(pos[0]-cam_range, pos[0]+cam_range, pos[1]-cam_range, pos[1]+cam_range)
             # update geometry positions
             for e, entity in enumerate(self.world.entities):
                 self.render_geoms_xform[e].set_translation(*entity.state.p_pos)
             # render to display or array
-            results.append(self.viewers[i].render(return_rgb_array = mode=='rgb_array'))
+            img = self.viewers[i].render(return_rgb_array=mode == 'rgb_array')
+            if img is not None:
+                img = resize(img, (self.img_obs_dim, self.img_obs_dim))
+                if self.use_grascale:
+                    rgb_weights = [0.2989, 0.5870, 0.1140]
+                    img = np.dot(img, rgb_weights)
+                    img = np.array([img])
+                else:
+                    img = np.array([img[:, :, i] for i in range(3)])
+            results.append(img)
 
         return results
 
