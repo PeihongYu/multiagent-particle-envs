@@ -19,7 +19,6 @@ def get_room_args():
 
     return args
 
-
 def get_room(room_id=0):
     wall_centers = []
     wall_shapes = []

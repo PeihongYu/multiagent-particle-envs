@@ -1,3 +1,13 @@
+from comet_ml import Experiment, ExistingExperiment
+log_comet = True
+
+if log_comet:
+    experiment = Experiment(
+        api_key="CC3qOVi4obAD5yimHHXIZ24HA",
+        project_name="marl-arl",
+        workspace="peihongyu",
+    )
+
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -37,21 +47,16 @@ LEN_EPISODES = 1000
 UPDATE_TIMESTEP = 1000
 curState = []
 newState = []
-reward_history = []
-agent_history_dict = defaultdict(list)
+agent_reward_history = [[]] * CONST.NUM_AGENTS
 
 timestep = 0
 loss = None
 
 for episode in tqdm(range(NUM_EPISODES)):
-    curVecState = env.reset()
-    curImgState = env.render()
+    curVecState = np.array(env.reset())
+    curImgState = np.array(env.render())
     curState = [curVecState, curImgState]
 
-    episodeReward = 0
-    epidoseLoss = 0
-    episodeNewVisited = 0
-    episodePenalty = 0
     agent_episode_reward = [0] * CONST.NUM_AGENTS
 
     for step in range(LEN_EPISODES):
@@ -62,13 +67,18 @@ for episode in tqdm(range(NUM_EPISODES)):
         #     action = rlAgent.policy.act(curState[i], memory,i)
         #     aActions.append(action)
         aActions = rlAgent.policy_old.act(curState, memory, CONST.NUM_AGENTS)
+        # print(aActions)
 
         # Perform actions
         newVecState, reward, done, info = env.step(aActions)
-        newImgState = env.render()
+        newVecState = np.array(newVecState)
+        newImgState = np.array(env.render())
         newState = [newVecState, newImgState]
         if step == LEN_EPISODES - 1:
             done = True
+
+        memory.rewards.append(reward)
+        memory.is_terminals.append(done)
 
         if timestep % UPDATE_TIMESTEP == 0:
             loss = rlAgent.update(memory)
@@ -88,14 +98,22 @@ for episode in tqdm(range(NUM_EPISODES)):
     # post episode
 
     # Record history
-    reward_history.append(episodeReward)
-
     for i in range(CONST.NUM_AGENTS):
-        agent_history_dict[i].append((agent_episode_reward[i]))
+        agent_reward_history[i].append(agent_episode_reward[i])
+        if len(agent_reward_history[i]) >= 100:
+            agent_reward_history[i] = agent_reward_history[i][-100:]
+
+    if log_comet:
+        for i in range(CONST.NUM_AGENTS):
+            experiment.log_metric("Reward_agent" + str(i), agent_episode_reward[i], episode)
+        experiment.log_metric("EpLen", step + 1, episode)
+        if len(agent_reward_history[0]) >= 100:
+            for i in range(CONST.NUM_AGENTS):
+                experiment.log_metric("Average reward_agent" + str(i), sum(agent_reward_history[i])/100, episode)
 
     # You may want to plot periodically instead of after every episode
     # Otherwise, things will be slow
-    rlAgent.summaryWriter_addMetrics(episode, loss, reward_history, agent_history_dict, LEN_EPISODES)
+    # rlAgent.summaryWriter_addMetrics(episode, loss, reward_history, agent_history_dict, LEN_EPISODES)
     if episode % 50 == 0:
         rlAgent.saveModel("checkpoints")
 

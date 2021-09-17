@@ -18,6 +18,7 @@ class Memory:
     def __init__(self, num_agents):
         self.actions = []
         self.states = []
+        self.observations = []
         self.logprobs = []
         self.rewards = []
         self.is_terminals = []
@@ -26,6 +27,7 @@ class Memory:
     def clear_memory(self):
         del self.actions[:]
         del self.states[:]
+        del self.observations[:]
         del self.logprobs[:]
         del self.rewards[:]
         del self.is_terminals[:]
@@ -62,7 +64,7 @@ class ActorCritic(nn.Module):
         #                )
 
         self.feature1 = nn.Sequential(
-            nn.Conv2d(2, 16, (8, 8), 4, 1),
+            nn.Conv2d(1, 16, (8, 8), 4, 1),
             nn.ReLU(),
             nn.Conv2d(16, 32, (4, 4), 2, 1),
             nn.ReLU(),
@@ -107,7 +109,7 @@ class ActorCritic(nn.Module):
         #                )
 
         self.feature2 = nn.Sequential(
-            nn.Conv2d(2, 16, (8, 8), 4, 1),
+            nn.Conv2d(1, 16, (8, 8), 4, 1),
             nn.ReLU(),
             nn.Conv2d(16, 32, (4, 4), 2, 1),
             nn.ReLU(),
@@ -129,15 +131,15 @@ class ActorCritic(nn.Module):
         self.train()
 
     def action_layer(self, x1, x2):
-        x1 = self.feature1(x1)
-        x2 = self.feature1v(x2)
+        x1 = self.feature1v(x1)
+        x2 = self.feature1(x2)
         x = torch.cat((x1, x2), dim = 1)
         x = self.reg1(x)
         return x
 
     def value_layer(self, x1, x2):
-        x1 = self.feature2(x1)
-        x2 = self.feature2v(x2)
+        x1 = self.feature2v(x1)
+        x2 = self.feature2(x2)
         x = torch.cat((x1,x2), dim = 1)
         x = self.reg2(x)
         return x
@@ -147,15 +149,16 @@ class ActorCritic(nn.Module):
 
     def act(self, state, memory, num_agents):
         with torch.no_grad():
-            state1 = torch.from_numpy(state[0][0]).float().to(device)
-            state2 = torch.from_numpy(state[1][0]).float().to(device)
+            state1 = torch.from_numpy(state[0]).float().to(device)
+            state2 = torch.from_numpy(state[1]).float().to(device)
             action_probs = self.action_layer(state1, state2)
             dist = Categorical(action_probs)
             action = dist.sample()
 
             action_list = []
             for agent_index in range(num_agents):
-                memory.states.append(state[agent_index])
+                memory.states.append(state1[agent_index])
+                memory.observations.append(state2[agent_index])
                 memory.actions.append(action[agent_index].view(1))
                 memory.logprobs.append(dist.log_prob(action[agent_index])[agent_index])
                 action_list.append(action[agent_index].item())
@@ -164,21 +167,23 @@ class ActorCritic(nn.Module):
 
     def act_max(self, state, memory, num_agents):
         #        with torch.no_grad():
-        state = torch.from_numpy(state).float().to(device)
-        action_probs = self.action_layer(state)
+        state1 = torch.from_numpy(state[0]).float().to(device)
+        state2 = torch.from_numpy(state[1]).float().to(device)
+        action_probs = self.action_layer(state1, state2)
         dist = Categorical(action_probs)
         action = dist.sample()
 
         action_list = []
         for agent_index in range(num_agents):
-            memory.states.append(state[agent_index])
+            memory.states.append(state1[agent_index])
+            memory.observations.append(state2[agent_index])
             memory.actions.append(action[agent_index])
             memory.logprobs.append(dist.log_prob(action[agent_index])[agent_index])
             action_list.append(action[agent_index].item())
         return action_list
 
-    def evaluate(self, state, action):
-        action_probs = self.action_layer(state)
+    def evaluate(self, state, observation, action):
+        action_probs = self.action_layer(state, observation)
         dist = Categorical(action_probs)
 
         action_logprobs = torch.diag(dist.log_prob(action))
@@ -186,7 +191,7 @@ class ActorCritic(nn.Module):
         action_logprobs = action_logprobs.view(-1, 1)
         dist_entropy = dist.entropy()
 
-        state_value = self.value_layer(state)
+        state_value = self.value_layer(state, observation)
 
         return action_logprobs, torch.squeeze(state_value), dist_entropy
 
@@ -219,7 +224,7 @@ class PPO:
                                                     reversed(agent_index_list)):
             if is_terminal:
                 discounted_reward_list[agent_index] = 0
-            discounted_reward_list[agent_index] = reward + (self.gamma * discounted_reward_list[agent_index])
+            discounted_reward_list[agent_index] = reward[agent_index] + (self.gamma * discounted_reward_list[agent_index])
             all_rewards.insert(0, discounted_reward_list[agent_index])
 
         # Normalizing the rewards:
@@ -241,20 +246,22 @@ class PPO:
             for i in range(minibatch_sz, mem_sz + 1, minibatch_sz):
                 #                print(prev,i, minibatch_sz, mem_sz)
                 mini_old_states = memory.states[prev:i]
+                mini_old_obsers = memory.observations[prev:i]
                 mini_old_actions = memory.actions[prev:i]
                 mini_old_logprobs = memory.logprobs[prev:i]
                 mini_rewards = all_rewards[prev:i]
 
                 # convert list to tensor
                 old_states = torch.stack(mini_old_states).to(device).detach()
+                old_obsers = torch.stack(mini_old_obsers).to(device).detach()
                 old_actions = torch.stack(mini_old_actions).to(device).detach()
                 old_logprobs = torch.stack(mini_old_logprobs).to(device).detach()
-                rewards = mini_rewards  # torch.from_numpy(mini_rewards).float().to(device)
+                rewards = mini_rewards.float()
 
                 prev = i
 
                 # Evaluating old actions and values :
-                logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
+                logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_obsers, old_actions)
                 # Finding the ratio (pi_theta / pi_theta__old):
                 ratios = torch.exp(logprobs.view(-1, 1) - old_logprobs.view(-1, 1).detach())
 

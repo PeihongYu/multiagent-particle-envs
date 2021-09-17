@@ -2,6 +2,7 @@ import gym
 from gym import spaces
 from gym.envs.registration import EnvSpec
 import numpy as np
+np.set_printoptions(threshold=np.inf, linewidth=1000, precision=3, suppress=True)
 from skimage.transform import resize
 
 from multiagent.multi_discrete import MultiDiscrete
@@ -30,7 +31,7 @@ class MultiAgentEnv(gym.Env):
         # environment parameters
         self.discrete_action_space = True
         # if true, action is a number 0...N, otherwise action is a one-hot N-dimensional vector
-        self.discrete_action_input = False
+        self.discrete_action_input = True
         # if true, even the action is continuous, action will be performed discretely
         self.force_discrete_action = world.discrete_action if hasattr(world, 'discrete_action') else False
         # if true, every agent has the same reward
@@ -39,7 +40,7 @@ class MultiAgentEnv(gym.Env):
 
         # configure spaces
         self.use_grascale = True
-        self.img_obs_dim = 50
+        self.img_obs_dim = 25
         self.action_space = []
         self.observation_space = []
         self.img_observation_space = []
@@ -104,7 +105,7 @@ class MultiAgentEnv(gym.Env):
     def step(self, action_n):
         obs_n = []
         reward_n = []
-        done_n = []
+        done_n = False
         info_n = {'n': []}
         self.agents = self.world.policy_agents
         # set action for each agent
@@ -114,10 +115,12 @@ class MultiAgentEnv(gym.Env):
         self.world.step()
         # record observation for each agent
         for agent in self.agents:
+            # print("agent action: ", agent.action.u, "  agent state: ", agent.state.p_pos, "  agent velocity: ", agent.state.p_vel)
             obs_n.append(self._get_obs(agent))
             reward_n.append(self._get_reward(agent))
-            done_n.append(self._get_done(agent))
-
+            # done_n.append(self._get_done(agent))
+            if self._get_done(agent):
+                done_n = True
             info_n['n'].append(self._get_info(agent))
 
         # all agents get total reward in cooperative case
@@ -199,7 +202,7 @@ class MultiAgentEnv(gym.Env):
                     agent.action.u[1] += action[0][3] - action[0][4]
                 else:
                     agent.action.u = action[0]
-            sensitivity = 5.0
+            sensitivity = 0.5  #5.0
             if agent.accel is not None:
                 sensitivity = agent.accel
             agent.action.u *= sensitivity

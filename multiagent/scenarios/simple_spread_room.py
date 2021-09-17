@@ -3,8 +3,6 @@ from multiagent.core import World, Agent, Landmark, Wall
 from multiagent.scenario import BaseScenario
 from multiagent.scenarios.room_arguments import get_room_args
 
-room_args = get_room_args()
-
 class Scenario(BaseScenario):
     def make_world(self):
         world = World()
@@ -27,6 +25,7 @@ class Scenario(BaseScenario):
             landmark.collide = False
             landmark.movable = False
         # add walls
+        room_args = get_room_args()
         world.walls = [Wall() for i in range(room_args.wall_num)]
         for i, wall in enumerate(world.walls):
             wall.name = 'wall %d' % i
@@ -48,14 +47,15 @@ class Scenario(BaseScenario):
             wall.color = np.array([0, 0.7, 0.0])
         # set random initial states
         for agent in world.agents:
-            # agent.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
-            agent.state.p_pos = np.array([1.5, 0])
+            agent.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
+            # agent.state.p_pos = np.array([1.5, 0])
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
         for i, landmark in enumerate(world.landmarks):
             landmark.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
-            landmark.state.p_pos = np.zeros(world.dim_p)
-            # landmark.state.p_vel = np.zeros(world.dim_p)
+            # landmark.state.p_pos = np.zeros(world.dim_p)
+            landmark.state.p_vel = np.zeros(world.dim_p)
+        room_args = get_room_args()
         for i, wall in enumerate(world.walls):
             wall.state.p_pos = np.array(room_args.wall_centers[i]) + world.landmarks[0].state.p_pos
             wall.state.p_vel = np.zeros(world.dim_p)

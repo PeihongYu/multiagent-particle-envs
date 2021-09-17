@@ -20,6 +20,7 @@ if __name__ == '__main__':
     world = scenario.make_world()
     # create multiagent environment
     env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, info_callback=None, shared_viewer=False)
+    env.discrete_action_input = False
     # render call to create viewer window (necessary only for interactive policies)
     env.render()
     # create interactive policies for each agent
@@ -31,7 +32,7 @@ if __name__ == '__main__':
         act_n = []
         for i, policy in enumerate(policies):
             # act_n.append(policy.action(obs_n[i]))
-            act_n.append(np.array([1,0,0.1,0,0,0,0]))
+            act_n.append(np.array([1,0,1,0,0,0,0]))
         # step environment
         obs_n, reward_n, done_n, _ = env.step(act_n)
         # render all agent views
